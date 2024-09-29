@@ -24,20 +24,24 @@ class MainView: UIViewController {
     private lazy var keyboardContainer = UIView()
     private lazy var readyButton = createActionButton(action: #selector(readyTapped), image: UIImage(resource: .completeNotEnable))
     private lazy var deleteButton = createActionButton(action: #selector(deleteTapped), image: UIImage(resource: .removeNotEnable))
-    private lazy var keyboardStackView = createStackView(axis: .vertical, spacing: 5, distribution: .fill)
+    private lazy var keyboardStackView = createStackView(axis: .vertical, spacing: 5, distribution: .fillEqually)
     private lazy var firstRowStackView = UIStackView()
     private lazy var secondRowStackView = UIStackView()
     private lazy var thirdRowStackViewWithButtons = UIStackView()
+    private lazy var fourdRowStackViewWithButton  = UIStackView()
     
     override func viewDidLoad() {
         super.viewDidLoad()
         setup()
-        presenter.start()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         presenter.saveData()
+    }
+    deinit {
+        
+        NotificationCenter.default.removeObserver(self)
     }
 }
 // MARK: -- Setup layer
@@ -47,9 +51,11 @@ private extension MainView {
         title = "5 букв"
         setupKeyboard()
         setupLetterGrid()
+        presenter.start()
+        NotificationCenter.default.addObserver(self, selector: #selector(appWillResignActive), name: UIApplication.willResignActiveNotification, object: nil)
     }
     func setupLetterGrid() {
-        let gridStackView = createStackView(axis: .vertical, spacing: 6, distribution: .fillEqually)
+        let gridStackView = createStackView(axis: .vertical, spacing: 6, distribution: .fill)
         view.addSubview(gridStackView)
         
         for _ in 0..<6 {
@@ -69,9 +75,10 @@ private extension MainView {
             gridStackView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
             gridStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             gridStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            gridStackView.bottomAnchor.constraint(equalTo: keyboardStackView.topAnchor, constant: -20)
+            gridStackView.heightAnchor.constraint(equalTo: gridStackView.widthAnchor, multiplier: 6.0/5.0),
         ])
     }
+    
     func setupKeyboard() {
         let alphabet: [Character] = Array("ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ")
         let firstRowLetters = Array(alphabet.prefix(12))
@@ -80,30 +87,34 @@ private extension MainView {
         
         firstRowStackView = createKeyboardRow(with: firstRowLetters)
         secondRowStackView = createKeyboardRow(with: secondRowLetters)
-        thirdRowStackViewWithButtons = createStackView(axis: .horizontal, spacing: 5, distribution: .fillEqually)
+        thirdRowStackViewWithButtons = createStackView(axis: .horizontal, spacing: 5, distribution: .fillProportionally)
+        fourdRowStackViewWithButton = createStackView(axis: .horizontal, spacing: 5, distribution: .fillProportionally)
         
         secondRowStackView.layoutMargins = UIEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
         secondRowStackView.isLayoutMarginsRelativeArrangement = true
         
         keyboardStackView.addArrangedSubview(firstRowStackView)
         keyboardStackView.addArrangedSubview(secondRowStackView)
-        
-        thirdRowStackViewWithButtons.addArrangedSubview(readyButton)
+        fourdRowStackViewWithButton.addArrangedSubview(readyButton)
         
         for letter in thirdRowLetters {
             let button = createLetterButton(title: String(letter))
             thirdRowStackViewWithButtons.addArrangedSubview(button)
         }
+        fourdRowStackViewWithButton.addArrangedSubview(thirdRowStackViewWithButtons)
         
-        thirdRowStackViewWithButtons.addArrangedSubview(deleteButton)
-        keyboardStackView.addArrangedSubview(thirdRowStackViewWithButtons)
+        fourdRowStackViewWithButton.addArrangedSubview(deleteButton)
+        keyboardStackView.addArrangedSubview(fourdRowStackViewWithButton)
         
         view.addSubview(keyboardStackView)
         
         NSLayoutConstraint.activate([
+            readyButton.widthAnchor.constraint(equalTo: thirdRowStackViewWithButtons.widthAnchor, multiplier: 1.5/9),
+            deleteButton.widthAnchor.constraint(equalTo: thirdRowStackViewWithButtons.widthAnchor, multiplier: 1.5/9),
             keyboardStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             keyboardStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             keyboardStackView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -25),
+            keyboardStackView.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 0.15)
         ])
     }
 }
@@ -118,6 +129,15 @@ private extension MainView {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         return stackView
     }
+    
+    func calculateCellSize() -> CGFloat {
+        let screenWidth = UIScreen.main.bounds.width
+        let totalPadding: CGFloat = 16 * 2 + 6 * 4
+        let availableWidth = screenWidth - totalPadding
+        let cellSize = availableWidth / 5
+        return cellSize
+    }
+    
     func createLabel() -> UILabel {
         let label = UILabel()
         label.textAlignment = .center
@@ -125,10 +145,16 @@ private extension MainView {
         label.textColor = .white
         label.backgroundColor = .black
         label.layer.borderColor = UIColor.white.cgColor
+        label.translatesAutoresizingMaskIntoConstraints = false
+        
+        let cellSize = calculateCellSize()
+        label.heightAnchor.constraint(equalToConstant: cellSize).isActive = true
+        label.widthAnchor.constraint(equalToConstant: cellSize).isActive = true
+        
         return label
     }
     func createKeyboardRow(with letters: [Character]) -> UIStackView {
-        let rowStackView = createStackView(axis: .horizontal, spacing: 5, distribution: .fillEqually)
+        let rowStackView = createStackView(axis: .horizontal, spacing: 5, distribution: .fill)
         for letter in letters {
             let button = createLetterButton(title: String(letter))
             rowStackView.addArrangedSubview(button)
@@ -143,7 +169,6 @@ private extension MainView {
         button.layer.borderColor = UIColor.white.cgColor
         button.layer.borderWidth = 1
         button.layer.cornerRadius = 4
-        button.heightAnchor.constraint(equalToConstant: 40).isActive = true
         button.addTarget(self, action: #selector(letterTapped(_:)), for: .touchUpInside)
         return button
     }
@@ -153,6 +178,11 @@ private extension MainView {
         button.layer.cornerRadius = 4
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
+    }
+    func passDataToAppDelegate() {
+        if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
+            appDelegate.gameState = presenter.gameState
+        }
     }
 }
 
@@ -266,7 +296,7 @@ extension MainView: MainViewProtocol {
             label.text = ""
             label.backgroundColor = .black
         }
-    
+        
         for (colIndex, label) in letterGrid[currentHorizontal].enumerated() {
             if colIndex < currentInput.count {
                 let letter = String(currentInput[currentInput.index(currentInput.startIndex, offsetBy: colIndex)]).uppercased()
@@ -299,4 +329,8 @@ extension MainView {
     @objc func readyTapped() {
         presenter.readyTap()
     }
+    @objc func appWillResignActive() {
+        passDataToAppDelegate()
+    }
+    
 }
